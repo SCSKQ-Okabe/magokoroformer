@@ -3,15 +3,15 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import math
-from magokorodataset2026 import *
-from magokoroformer2026 import *
+from magokorodataset2025 import *
+from magokoroformer2025 import *
 import torch.nn.functional as F
 import itertools
 import psycopg2
 import psycopg2.extras
 
 LOG_FILE = 'report.csv'
-MODEL_FN = '28-148-2cond.pth'
+MODEL_FN = 'horse_racing_transformer.pth'
 
 def logprint(s):
     with open(LOG_FILE, mode='a') as f:
@@ -97,4 +97,4 @@ def predict(fromdate, todate):
 
 # ===== メイン実行 =====
 if __name__ == "__main__":
-    predict('20250101', '20251231')
+    predict('20250901', '20260831')

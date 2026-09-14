@@ -21,7 +21,7 @@ DUMP_KISYU_FILE = './data/dump_kisyu2010_2025.pickle'
 
 class Magokoro():
     def __init__(self, fromdate='20181225', todate='20181231', train=True, dbcon="dbname=everydb2 user=postgres password=okabe1171"):
-        self.connection = psycopg2.connect(dbcon)
+        #self.connection = psycopg2.connect(dbcon)
         self.fromdate = fromdate
         self.todate = todate
         self.racekey = {}

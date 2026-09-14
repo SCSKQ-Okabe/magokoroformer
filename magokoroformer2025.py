@@ -8,9 +8,17 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from torchview import draw_graph
 
+# Hyper Param
+BASE_MODEL = './28-148-2cond.pth'# 2015-2024 trained. if no use model define None
+DATA_TRAIN = {'from':'20200101', 'to':'20250831'}
+DATA_TEST = {'from':'20250901', 'to':'20260831'}
+LOSS_WEIGHT ={'kelly':0.7, 'acc':0.2, 'rank':0.1}
+SELECT_RACE_COND = '障害R、新馬R、2歳OP未満Rは対象外'
+MAX_EPOCHS = 500
+
 # ===== ケリー基準を組み込んだ損失関数 =====
 class KellyCriterionLoss(nn.Module):
-    def __init__(self, alpha=0.6, beta=0.3, gamma=0.1):
+    def __init__(self, alpha=LOSS_WEIGHT['kelly'], beta=LOSS_WEIGHT['kelly'], gamma=LOSS_WEIGHT['kelly']):
         super().__init__()
         self.alpha = alpha  # ケリー基準重視
         self.beta = beta    # 的中率重視
@@ -42,7 +50,8 @@ class KellyCriterionLoss(nn.Module):
             
             # マイナスの場合は最低倍率1%に（購入しないのではなく最小限購入）
             # 最大5%の購入倍率
-            kelly_f = torch.clamp(kelly_f, min=0.01, max=1.0)
+            #kelly_f = torch.clamp(kelly_f, min=0.01, max=1.0)
+            kelly_f = torch.clamp(kelly_f, min=0.0, max=1.0)
             kelly_fractions.append(kelly_f)
             
             # ケリー基準による期待リターン
@@ -478,7 +487,7 @@ class ImprovedHorseRacingTransformer(nn.Module):
         return predictions
 
 # ===== トレーニング関数（ケリー基準対応版） =====
-def kelly_train_model_improved_with_realtime_plot(model, train_loader, val_loader, epochs=300, lr=0.001, 
+def kelly_train_model_improved_with_realtime_plot(model, train_loader, val_loader, epochs=MAX_EPOCHS, lr=0.001, 
                         device='cuda', use_label_smoothing=True):
     model = model.to(device)
     
@@ -531,9 +540,9 @@ def kelly_train_model_improved_with_realtime_plot(model, train_loader, val_loade
             padding_mask = padding_mask.to(device)
 
             # オッズフィルタ: 2.0未満のサンプルを除外
-            valid_samples_mask = odds >= 2.0
-            if not valid_samples_mask.any():
-                continue
+            #valid_samples_mask = odds >= 2.0
+            #if not valid_samples_mask.any():
+            #    continue
             
             optimizer.zero_grad()
             predictions = model(horse_info, running_mask, padding_mask)
@@ -544,8 +553,8 @@ def kelly_train_model_improved_with_realtime_plot(model, train_loader, val_loade
             )
 
             # オッズが2.0未満のサンプルの損失を0にする
-            loss = loss * valid_samples_mask.float()
-            loss = (loss * valid_samples_mask.float()).sum() / valid_samples_mask.sum()
+            #loss = loss * valid_samples_mask.float()
+            #loss = (loss * valid_samples_mask.float()).sum() / valid_samples_mask.sum()
             
             # Label Smoothingを追加で適用
             if label_smoothing is not None:
@@ -565,6 +574,8 @@ def kelly_train_model_improved_with_realtime_plot(model, train_loader, val_loade
             is_correct = (predicted == winner_idx).float()
             batch_kelly_recovery = (is_correct * odds * kelly_fractions).sum().item()
             batch_kelly_cost = kelly_fractions.sum().item()  # 購入コスト
+            #train_kelly_recovery += (is_correct * odds * kelly_fractions).sum().item()
+            #batch_kelly_cost += kelly_fractions.sum().item()  # 購入コスト
             train_kelly_recovery += batch_kelly_recovery - batch_kelly_cost
         
         # ===== 検証 =====
@@ -593,8 +604,11 @@ def kelly_train_model_improved_with_realtime_plot(model, train_loader, val_loade
                 
                 # ケリー基準による回収率計算
                 is_correct = (predicted == winner_idx).float()
-                val_kelly_recovery += (is_correct * odds * kelly_fractions).sum().item()
-                val_kelly_cost += kelly_fractions.sum().item()
+                #val_kelly_recovery += (is_correct * odds * kelly_fractions).sum().item()
+                #val_kelly_cost += kelly_fractions.sum().item()
+                batch_kelly_recovery = (is_correct * odds * kelly_fractions).sum().item()
+                batch_kelly_cost = kelly_fractions.sum().item()  # 購入コスト
+                val_kelly_recovery += batch_kelly_recovery - batch_kelly_cost
         
         avg_train_loss = train_loss / len(train_loader)
         avg_val_loss = val_loss / len(val_loader)
@@ -603,7 +617,8 @@ def kelly_train_model_improved_with_realtime_plot(model, train_loader, val_loade
         
         # ケリー基準による回収率（純利益/コスト * 100）
         train_kelly_rec_rate = 100 * (train_kelly_recovery + train_total) / train_total if train_total > 0 else 0
-        val_kelly_rec_rate = 100 * val_kelly_recovery / val_kelly_cost if val_kelly_cost > 0 else 0
+        val_kelly_rec_rate = 100 * (val_kelly_recovery + val_total) / val_total if val_total > 0 else 0
+        #val_kelly_rec_rate = 100 * val_kelly_recovery / val_kelly_cost if val_kelly_cost > 0 else 0
         
         current_lr = optimizer.param_groups[0]['lr']
         overfitting_gap = train_acc - val_acc
@@ -709,20 +724,17 @@ def kelly_train_model_improved_with_realtime_plot(model, train_loader, val_loade
     return model
 
 # ===== メイン実行 =====
-# Hyper Param
-# base model :      './28-148-2cond.pth' 2015-2024
-# train_dataset :   fromdate='20200101', todate='20250831'
-# val_dataset :     fromdate='20250901', todate='20260831'
-# race select :     evaluate_all_race :: choose race condition
-# loss weight:      alpha=0.3, beta=0.6, gamma=0.1 (kelly,acc,rank)
-# 
 if __name__ == "__main__":
     # デバイス設定
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using device: {device}')
-    
-    train_dataset = MagokoroDataset(fromdate='20200101', todate='20250831')
-    val_dataset = MagokoroDataset(fromdate='20250901', todate='20260831', is_training=False)
+
+    print(f"train data : {DATA_TRAIN['from']} - {DATA_TRAIN['to']}")
+    print(f"test data  : {DATA_TEST['from']} - {DATA_TEST['to']}")
+    print(f'select race condition : {SELECT_RACE_COND}')
+
+    train_dataset = MagokoroDataset(fromdate=DATA_TRAIN['from'], todate=DATA_TRAIN['to'])
+    val_dataset = MagokoroDataset(fromdate=DATA_TEST['from'], todate=DATA_TEST['to'], is_training=False)
 
     print('train_dataset num=',len(train_dataset))
     print('val_dataset num=',len(val_dataset))
@@ -730,9 +742,13 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=512, shuffle=False, num_workers=0)
 
+    print(f"loss weight : kelly={LOSS_WEIGHT['kelly']}, acc={LOSS_WEIGHT['acc']}, rank={LOSS_WEIGHT['rank']}")
+
     # モデル作成
     model = ImprovedHorseRacingTransformer()
-    model.load_state_dict(torch.load('./28-148-2cond.pth'))
+    if BASE_MODEL is not None:
+        print(f'load base model : {BASE_MODEL}')
+        model.load_state_dict(torch.load(BASE_MODEL))
 
     # 訓練
     print("訓練を開始します...")
