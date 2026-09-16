@@ -3,3 +3,6 @@ data/
 *.pth
 __pycache__/
 *.pyc
+*.pickle
+data/*pickle
+
