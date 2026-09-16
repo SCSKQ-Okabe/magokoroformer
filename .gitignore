@@ -1,4 +1,5 @@
 venv/
-horse_racing_transformer.pth
+data/
+*.pth
 __pycache__/
 *.pyc
