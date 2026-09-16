@@ -13,6 +13,7 @@ BASE_MODEL = None
 DATA_TRAIN = {'from':'20200101', 'to':'20250831'}
 DATA_TEST = {'from':'20250901', 'to':'20260831'}
 LOSS_WEIGHT ={'kelly':0.7, 'acc':0.2, 'rank':0.1}
+KELLY_CLAMP = {'min':0.0, 'max':0.03}
 SELECT_RACE_COND = '障害R、新馬Rは対象外'
 MAX_EPOCHS = 500
 
@@ -42,16 +43,11 @@ class KellyCriterionLoss(nn.Module):
         for i in range(batch_size):
             win_prob = probs[i, winner_idx[i]]  # 勝ち馬の予測確率
             b = winner_odds[i] - 1.0  # ネットオッズ
-            #b = max(b, 30.0)
             q = 1.0 - win_prob
             
             # ケリー基準値 1/4
             kelly_f = (win_prob * b - q) / (b + 1e-8)
-            
-            # マイナスの場合は最低倍率1%に（購入しないのではなく最小限購入）
-            # 最大5%の購入倍率
-            #kelly_f = torch.clamp(kelly_f, min=0.01, max=1.0)
-            kelly_f = torch.clamp(kelly_f, min=0.0, max=1.0)
+            kelly_f = torch.clamp(kelly_f, min=KELLY_CLAMP['min'], max=KELLY_CLAMP['max'],)
             kelly_fractions.append(kelly_f)
             
             # ケリー基準による期待リターン
@@ -67,11 +63,6 @@ class KellyCriterionLoss(nn.Module):
         # ケリー基準による期待収益を最大化（負の損失）
         kelly_loss = -kelly_returns.mean()
         
-        # 3. オッズ重み付き損失（従来の方法も保持）
-        winner_probs = probs[torch.arange(batch_size), winner_idx]
-        odds_weight = torch.log(winner_odds.clamp(min=1.0, max=50.0) + 1.0)
-        odds_weighted_loss = -(torch.log(winner_probs + 1e-8) * odds_weight).mean()
-        
         # 4. Ranking Loss
         sorted_indices = torch.argsort(predictions, dim=1, descending=True)
         winner_expanded = winner_idx.unsqueeze(1).expand(-1, predictions.size(1))
@@ -82,9 +73,7 @@ class KellyCriterionLoss(nn.Module):
         ranking_loss = normalized_ranks.mean()
         
         # 統合損失（ケリー基準を追加）
-        total_loss = (self.beta * ce_loss + 
-                     self.alpha * kelly_loss + 
-                     self.gamma * ranking_loss)
+        total_loss = (self.alpha * kelly_loss + self.beta * ce_loss + self.gamma * ranking_loss)
         
         return total_loss, ce_loss, kelly_loss, ranking_loss, kelly_fractions
 

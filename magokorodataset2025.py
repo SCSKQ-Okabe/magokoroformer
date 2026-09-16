@@ -713,7 +713,7 @@ class Magokoro():
             # 新馬と2歳オープン未満は除外 2026/9/13 Update
             r = self.racekey[rkey]
             age,jokencd = self.get_age_joken(r)
-            if r['ymd'] >= self.fromdate and r['ymd'] <= self.todate and jokencd != 701 and (age > 0 or jokencd == 999):
+            if r['ymd'] >= self.fromdate and r['ymd'] <= self.todate and jokencd != 701:# and (age > 0 or jokencd == 999):
                 x = self.evaluate_one_race(r)
                 if x is not None:
                     cur_dat, odds, result, running, padding = x
