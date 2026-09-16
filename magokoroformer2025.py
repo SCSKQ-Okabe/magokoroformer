@@ -13,7 +13,7 @@ BASE_MODEL = None
 DATA_TRAIN = {'from':'20200101', 'to':'20250831'}
 DATA_TEST = {'from':'20250901', 'to':'20260831'}
 LOSS_WEIGHT ={'kelly':0.7, 'acc':0.2, 'rank':0.1}
-KELLY_CLAMP = {'min':0.0, 'max':0.03}
+KELLY_CLAMP = {'min':-0.03, 'max':0.03}
 SELECT_RACE_COND = '障害R、新馬Rは対象外'
 MAX_EPOCHS = 500
 
@@ -45,9 +45,10 @@ class KellyCriterionLoss(nn.Module):
             b = winner_odds[i] - 1.0  # ネットオッズ
             q = 1.0 - win_prob
             
-            # ケリー基準値 1/4
+            # ケリー基準値
             kelly_f = (win_prob * b - q) / (b + 1e-8)
-            kelly_f = torch.clamp(kelly_f, min=KELLY_CLAMP['min'], max=KELLY_CLAMP['max'],)
+            # ここでマイナス値も許容するように clamp の下限を負に設定
+            kelly_f = torch.clamp(kelly_f, min=KELLY_CLAMP['min'], max=KELLY_CLAMP['max'])
             kelly_fractions.append(kelly_f)
             
             # ケリー基準による期待リターン
@@ -55,7 +56,13 @@ class KellyCriterionLoss(nn.Module):
             # 負けた場合: -kelly_f
             # 期待値 = p * (kelly_f * odds) - (1-p) * kelly_f
             expected_return = win_prob * (kelly_f * winner_odds[i]) - q * kelly_f
-            kelly_returns.append(expected_return)
+
+            # オッズに応じた重み付け: 2倍以下 -> -1, 4倍以上 -> +1, 2~4はリニアに変化
+            # mapping: weight = odds - 3  (2->-1, 4->+1)
+            weight = torch.clamp(winner_odds[i] - 3.0, min=-1.0, max=1.0)
+            weighted_expected = expected_return * weight
+
+            kelly_returns.append(weighted_expected)
         
         kelly_fractions = torch.stack(kelly_fractions)
         kelly_returns = torch.stack(kelly_returns)
@@ -332,7 +339,7 @@ class ImprovedHorseRacingTransformer(nn.Module):
         self.race_norm = nn.LayerNorm(d_model)
         self.race_dropout = nn.Dropout(dropout)
         
-        # ===== 予測ヘッド =====
+        # ===== ��測ヘッド =====
         self.predictor = nn.Sequential(
             nn.Linear(d_model, d_model * 2),
             nn.LayerNorm(d_model * 2),
