@@ -1,1 +1,4 @@
-data/dump_horse2010_2025.pickle filter=lfs diff=lfs merge=lfs -text
+data/dump_horse2010.pickle filter=lfs diff=lfs merge=lfs -text
+data/dump_kisyu2010.pickle filter=lfs diff=lfs merge=lfs -text
+data/dump_list2010.pickle filter=lfs diff=lfs merge=lfs -text
+data/dump_race2010.pickle filter=lfs diff=lfs merge=lfs -text
