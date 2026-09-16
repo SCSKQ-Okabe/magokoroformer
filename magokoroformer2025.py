@@ -9,16 +9,16 @@ import matplotlib.pyplot as plt
 from torchview import draw_graph
 
 # Hyper Param
-BASE_MODEL = './28-148-2cond.pth'# 2015-2024 trained. if no use model define None
+BASE_MODEL = None
 DATA_TRAIN = {'from':'20200101', 'to':'20250831'}
 DATA_TEST = {'from':'20250901', 'to':'20260831'}
 LOSS_WEIGHT ={'kelly':0.7, 'acc':0.2, 'rank':0.1}
-SELECT_RACE_COND = '障害R、新馬R、2歳OP未満Rは対象外'
+SELECT_RACE_COND = '障害R、新馬Rは対象外'
 MAX_EPOCHS = 500
 
 # ===== ケリー基準を組み込んだ損失関数 =====
 class KellyCriterionLoss(nn.Module):
-    def __init__(self, alpha=LOSS_WEIGHT['kelly'], beta=LOSS_WEIGHT['kelly'], gamma=LOSS_WEIGHT['kelly']):
+    def __init__(self, alpha=LOSS_WEIGHT['kelly'], beta=LOSS_WEIGHT['acc'], gamma=LOSS_WEIGHT['rank']):
         super().__init__()
         self.alpha = alpha  # ケリー基準重視
         self.beta = beta    # 的中率重視
