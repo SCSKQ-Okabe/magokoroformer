@@ -1,18 +1,17 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import math
 from magokorodataset2025 import *
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-from torchview import draw_graph
 
 # Hyper Param
 BASE_MODEL = None
 DATA_TRAIN = {'from':'20200101', 'to':'20250831'}
 DATA_TEST = {'from':'20250901', 'to':'20260831'}
-LOSS_WEIGHT ={'kelly':0.7, 'acc':0.2, 'rank':0.1}
+LOSS_WEIGHT ={'kelly':0.5, 'acc':0.3, 'rank':0.2}
 KELLY_CLAMP = {'min':-0.03, 'max':0.03}
 SELECT_RACE_COND = '障害R、新馬Rは対象外'
 MAX_EPOCHS = 500
@@ -730,7 +729,8 @@ if __name__ == "__main__":
     print(f'select race condition : {SELECT_RACE_COND}')
 
     train_dataset = MagokoroDataset(fromdate=DATA_TRAIN['from'], todate=DATA_TRAIN['to'])
-    val_dataset = MagokoroDataset(fromdate=DATA_TEST['from'], todate=DATA_TEST['to'], is_training=False)
+    val_dataset = MagokoroDataset(fromdate=DATA_TEST['from'], todate=DATA_TEST['to'])
+    #val_dataset = MagokoroDataset(fromdate=DATA_TEST['from'], todate=DATA_TEST['to'], is_training=False)
 
     print('train_dataset num=',len(train_dataset))
     print('val_dataset num=',len(val_dataset))

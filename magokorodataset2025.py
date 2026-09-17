@@ -3,10 +3,7 @@ import numpy as np
 import pickle
 from torch.utils.data import Dataset
 import torch
-import psycopg2
 import matplotlib.pyplot as plt
-import datetime
-import pprint
 
 # hyper param
 INFO_LEN = 41
@@ -635,13 +632,13 @@ class Magokoro():
                 pre_ymd = p[1]['ymd']
                             
         # 過去レースが無ければ評価できない
-        #if len(pv) == 0 and h['ninki'] < 6 and h['ninki'] > 0 and not is_training:
+        if len(pv) == 0 and h['ninki'] == 1 or not is_training:
+            return None
+        #_,jokencd = self.get_age_joken(r)
+        #if len(pv) == 0 and jokencd == 703 and h['odds'] < 4.0 and not is_training:
         #    return None
-        _,jokencd = self.get_age_joken(r)
-        if len(pv) == 0 and jokencd == 703 and h['odds'] < 4.0 and not is_training:
-            return None
-        if len(pv) == 0 and jokencd != 703 and h['odds'] < 2.6 and not is_training:
-            return None
+        #if len(pv) == 0 and jokencd != 703 and h['odds'] < 2.6 and not is_training:
+        #    return None
             
         # 過去レースが7未満の場合は0データで埋める
         if len(pv) < PAST_RACE:
@@ -679,8 +676,8 @@ class Magokoro():
             odds.append(h['odds'])
             result.append(h['kakuteijyuni'])
 
-        #if len(hv) < 7 or (is_training and no_cnt > 0): # 過去レース0の馬が1頭でもいたら非対象
-        if len(hv) - no_cnt < 5 or (is_training and no_cnt > 0): # 評価可能な馬が5頭未満は対象外
+        # 評価可能な馬が5頭未満は対象外、学習中は1頭でもいたら対象外
+        if len(hv) - no_cnt < 5 or (is_training and no_cnt > 0):
             return None
 
         h_num = len(hv)
@@ -739,7 +736,8 @@ class RaceDataAugmentation:
         self.noise_std = noise_std
     
     def __call__(self, horse_info, is_training=True):
-        if not is_training:
+        #if not is_training:
+        if True:
             return horse_info
         
         # 連続値特徴にノイズを追加

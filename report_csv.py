@@ -1,14 +1,7 @@
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-import math
 from magokorodataset2025 import *
 from magokoroformer2025 import *
-import torch.nn.functional as F
-import itertools
-import psycopg2
-import psycopg2.extras
+import os
 
 LOG_FILE = 'report.csv'
 MODEL_FN = 'horse_racing_transformer.pth'
@@ -22,6 +15,10 @@ def logprintHead(s):
         f.write(s+'\n')
 
 def predict(fromdate, todate):
+
+    if os.path.exists(LOG_FILE):
+        os.remove(LOG_FILE)
+
     # デバイス設定
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using device: {device}')
