@@ -75,12 +75,64 @@ def run_kelly_backtest(model, dataset, config, device, output_csv):
             x = horse_info.unsqueeze(0).to(device)
             r = running.unsqueeze(0).to(device)
             p = padding.unsqueeze(0).to(device)
-            probabilities = torch.softmax(model(x, r, p), dim=1)[0].cpu().numpy()
+
+            # DEBUG: print raw data shape before prediction for diagnosis.
+            print(
+                f"[debug] race={index} "
+                f"horse_info_shape={tuple(horse_info.shape)} "
+                f"winner={int(winner)} "
+                f"odds_shape={tuple(odds.shape)} "
+                f"running_shape={tuple(running.shape)} "
+                f"padding_shape={tuple(padding.shape)}"
+            )
+
+            logits = model(x, r, p)
+            print(f"[debug] race={index} logits_shape={tuple(logits.shape)}")
+
+            if logits.ndim != 2 or logits.shape[0] != 1:
+                raise ValueError(
+                    f"Unexpected logits shape for race={index}: {tuple(logits.shape)} "
+                    f"(expected (1, num_horses))."
+                )
+
+            probabilities = torch.softmax(logits, dim=1)[0].cpu().numpy()
             valid = np.asarray(running).astype(bool)
             candidates = np.where(valid)[0]
-            if len(candidates) == 0:
+
+            print(
+                f"[debug] race={index} probabilities_len={len(probabilities)} "
+                f"running_len={len(running)} candidates={candidates.tolist()}"
+            )
+
+            if probabilities.size == 0:
+                print(f"[debug] race={index} skipped because probabilities is empty.")
                 continue
+
+            if probabilities.shape[0] != valid.shape[0]:
+                raise ValueError(
+                    f"Size mismatch in race={index}: "
+                    f"probabilities.shape={probabilities.shape}, "
+                    f"running.shape={running.shape}, "
+                    f"valid.shape={valid.shape}"
+                )
+
+            if len(candidates) == 0:
+                print(f"[debug] race={index} has no valid running horses; skipping.")
+                continue
+
             selected = max(candidates, key=lambda i: probabilities[i])
+            print(
+                f"[debug] race={index} selected={selected} "
+                f"prob_selected={probabilities[selected]:.8f} "
+                f"odds_selected={float(odds[selected]):.4f}"
+            )
+
+            if selected >= len(probabilities):
+                raise IndexError(
+                    f"selected={selected} out of range for probabilities length={len(probabilities)} "
+                    f"race={index}"
+                )
+
             stake = allowed_stake(bankroll, probabilities[selected], float(odds[selected]), config)
             before = bankroll
             won = selected == int(winner)
