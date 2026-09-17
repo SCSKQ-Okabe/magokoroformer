@@ -76,73 +76,62 @@ def run_kelly_backtest(model, dataset, config, device, output_csv):
             r = running.unsqueeze(0).to(device)
             p = padding.unsqueeze(0).to(device)
 
-            # DEBUG: print raw data shape before prediction for diagnosis.
-            print(
-                f"[debug] race={index} "
-                f"horse_info_shape={tuple(horse_info.shape)} "
-                f"winner={int(winner)} "
-                f"odds_shape={tuple(odds.shape)} "
-                f"running_shape={tuple(running.shape)} "
-                f"padding_shape={tuple(padding.shape)}"
-            )
-
             logits = model(x, r, p)
-            print(f"[debug] race={index} logits_shape={tuple(logits.shape)}")
-
             if logits.ndim != 2 or logits.shape[0] != 1:
-                raise ValueError(
-                    f"Unexpected logits shape for race={index}: {tuple(logits.shape)} "
-                    f"(expected (1, num_horses))."
+                print(
+                    f"[warn] skip race={index}: unexpected logits shape "
+                    f"{tuple(logits.shape)} (expected (1, N))"
                 )
+                continue
 
-            probabilities = torch.softmax(logits, dim=1)[0].cpu().numpy()
+            probabilities = torch.softmax(logits, dim=1)[0].detach().cpu().numpy()
             valid = np.asarray(running).astype(bool)
-            candidates = np.where(valid)[0]
-
-            print(
-                f"[debug] race={index} probabilities_len={len(probabilities)} "
-                f"running_len={len(running)} candidates={candidates.tolist()}"
-            )
+            candidates = np.flatnonzero(valid)
 
             if probabilities.size == 0:
-                print(f"[debug] race={index} skipped because probabilities is empty.")
+                print(f"[warn] skip race={index}: empty probabilities array")
                 continue
 
-            if probabilities.shape[0] != valid.shape[0]:
-                raise ValueError(
-                    f"Size mismatch in race={index}: "
-                    f"probabilities.shape={probabilities.shape}, "
-                    f"running.shape={running.shape}, "
-                    f"valid.shape={valid.shape}"
+            if probabilities.shape[0] != running.shape[0] or odds.shape[0] != running.shape[0]:
+                print(
+                    f"[warn] skip race={index}: shape mismatch "
+                    f"probabilities={probabilities.shape}, "
+                    f"running={running.shape}, odds={odds.shape}"
                 )
-
-            if len(candidates) == 0:
-                print(f"[debug] race={index} has no valid running horses; skipping.")
                 continue
 
-            selected = max(candidates, key=lambda i: probabilities[i])
-            print(
-                f"[debug] race={index} selected={selected} "
-                f"prob_selected={probabilities[selected]:.8f} "
-                f"odds_selected={float(odds[selected]):.4f}"
-            )
+            if candidates.size == 0:
+                continue
 
+            # Choose only among valid horses. This avoids indexing into a zero-length
+            # or mismatched probability vector.
+            candidate_probs = probabilities[candidates]
+            if candidate_probs.size == 0:
+                continue
+
+            selected = int(candidates[np.argmax(candidate_probs)])
             if selected >= len(probabilities):
-                raise IndexError(
-                    f"selected={selected} out of range for probabilities length={len(probabilities)} "
-                    f"race={index}"
+                print(
+                    f"[warn] skip race={index}: selected={selected} exceeds "
+                    f"probabilities length={len(probabilities)}"
                 )
+                continue
 
-            stake = allowed_stake(bankroll, probabilities[selected], float(odds[selected]), config)
+            odd_value = float(odds[selected])
+            if not np.isfinite(probabilities[selected]) or not np.isfinite(odd_value):
+                print(f"[warn] skip race={index}: invalid probability or odds")
+                continue
+
+            stake = allowed_stake(bankroll, float(probabilities[selected]), odd_value, config)
             before = bankroll
             won = selected == int(winner)
-            bankroll = settle(bankroll, stake, won, float(odds[selected]))
+            bankroll = settle(bankroll, stake, won, odd_value)
             bonus, hits = threshold_bonus(before, bankroll, config.initial_bankroll)
             bankroll += bonus
             max_bankroll = max(max_bankroll, bankroll)
             rows.append({"race": index, "bankroll": round(bankroll, 2), "stake": stake,
                          "selected": selected, "probability": probabilities[selected],
-                         "odds": float(odds[selected]), "won": int(won), "bonus": bonus,
+                         "odds": odd_value, "won": int(won), "bonus": bonus,
                          "kelly_purchase": int(stake > 0), "threshold_hits": sum(hits.values())})
 
     with open(output_csv, "w", newline="", encoding="utf-8") as handle:
