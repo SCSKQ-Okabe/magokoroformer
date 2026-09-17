@@ -1,0 +1,32 @@
+# RL bankroll environment specification
+
+## 目的
+この実装は、既存の `magokoroformer` をベースにして、競馬の各レースで「どの馬に」「いくら賭けるか」を強化学習で決定し、総残高を伸ばすことを狙います。
+
+## ルール
+- 初期残高: 100,000 円
+- 最低賭金: 100 円
+- 最大賭金: 残高の 3% まで
+- 1 レースごとに 1 頭へ賭ける
+- 勝ちなら payout = bet * odds
+- 負けなら bankroll -= bet
+- 2 倍、3 倍、... 10 倍到達時にボーナス報酬を付与
+
+## 実装ファイル
+- `rl_env.py` : 環境定義と資金管理ルール
+- `rl_agent.py` : DQN 方式のエージェント
+- `train_rl.py` : 学習ループ
+- `evaluate_rl.py` : 学習済みモデルの評価
+
+## 実行例
+```bash
+python train_rl.py --train-from 20200101 --train-to 20250831 --eval-from 20250901 --eval-to 20260831 --episodes 50
+python evaluate_rl.py --model-path rl_model.pth --eval-from 20250901 --eval-to 20260831
+```
+
+## 注意
+- この実装は「既存モデルを用いた RL 環境の骨組み」を提供することを目的にしています。
+- 本番環境では、賭け候補の選択や損失抑制の重みを調整し、より現実的な賭け戦略に発展させます。
+- 既存の `magokoroformer2025.py` の重みファイル `horse_racing_transformer.pth` がある場合、それを利用して予測スコアを付加できます。
+
+# file end
