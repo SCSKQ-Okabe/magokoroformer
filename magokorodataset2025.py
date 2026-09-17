@@ -736,8 +736,8 @@ class RaceDataAugmentation:
         self.noise_std = noise_std
     
     def __call__(self, horse_info, is_training=True):
-        #if not is_training:
-        if True:
+        if not is_training:
+        #if True:
             return horse_info
         
         # 連続値特徴にノイズを追加

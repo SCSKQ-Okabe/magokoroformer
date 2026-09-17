@@ -9,10 +9,9 @@ import matplotlib.pyplot as plt
 
 # Hyper Param
 BASE_MODEL = None
-DATA_TRAIN = {'from':'20200101', 'to':'20250831'}
+DATA_TRAIN = {'from':'20150101', 'to':'20250831'}
 DATA_TEST = {'from':'20250901', 'to':'20260831'}
 LOSS_WEIGHT ={'kelly':0.5, 'acc':0.3, 'rank':0.2}
-KELLY_CLAMP = {'min':-0.03, 'max':0.03}
 SELECT_RACE_COND = '障害R、新馬Rは対象外'
 MAX_EPOCHS = 500
 
