@@ -705,12 +705,13 @@ class Magokoro():
         tan = []
         running_mask = []
         padding_mask = []
+        # --- 💡 新しく全馬のオッズを格納するリストを追加 ---
+        all_tan = []
 
         for rkey in self.racelist:
-            # 新馬と2歳オープン未満は除外 2026/9/13 Update
             r = self.racekey[rkey]
-            age,jokencd = self.get_age_joken(r)
-            if r['ymd'] >= self.fromdate and r['ymd'] <= self.todate and jokencd != 701:# and (age > 0 or jokencd == 999):
+            age, jokencd = self.get_age_joken(r)
+            if r['ymd'] >= self.fromdate and r['ymd'] <= self.todate and jokencd != 701:
                 x = self.evaluate_one_race(r)
                 if x is not None:
                     cur_dat, odds, result, running, padding = x
@@ -720,16 +721,32 @@ class Magokoro():
                     
                     cur_result = np.where(result==1)[0][0]
                     cur_tan = odds[cur_result]
+
+                    # === 💡 ここを追加：訓練データ（self.fromdateが過去の場合など）で、
+                    # 1着馬のオッズ（cur_tan）が 2.0倍未満（1倍台）のレースを学習から完全に除外する ===
+                    # ※バックテスト（検証データ）期間である 20250901 以降は除外せず全て残します
+                    if r['ymd'] < '20250901' and cur_tan < 2.0:
+                        continue  # 1倍台のレースをスキップ（学習させない）
+                    # =======================================================================
+                    
+
                     cur_dat = np.asarray(cur_dat, dtype=np.float32)
                     cur_tan = np.asarray(cur_tan, dtype=np.float32)
+                    
+                    # --- 💡 出走全馬のオッズ配列（18頭分）をNumPy配列化 ---
+                    cur_all_odds = np.asarray(odds, dtype=np.float32)
 
                     dat.append(cur_dat)
                     label.append(cur_result)
                     tan.append(cur_tan)
                     running_mask.append(running)
                     padding_mask.append(padding)
+                    # --- 💡 リストに追加 ---
+                    all_tan.append(cur_all_odds)
 
-        return dat, label, tan, running_mask, padding_mask, self.racelist
+        # --- 💡 戻り値の5番目（self.racelistの前）に all_tan を追加 ---
+        return dat, label, tan, running_mask, padding_mask, all_tan, self.racelist
+
 
 class RaceDataAugmentation:
     def __init__(self, noise_std=0.01):
@@ -760,11 +777,14 @@ class RaceDataAugmentation:
         horse_info = torch.clip(horse_info, 0.0, 1.0)
         
         return horse_info
-    
+
+
 class MagokoroDataset(Dataset):
     def __init__(self, fromdate='20140101', todate='20181231', is_training=True):
         m = Magokoro(fromdate, todate)
-        dat, label, tan, running_mask, padding_mask, racelist = m.evaluate_all_race()
+        # --- 💡 ここを修正：all_tan を変数受け取り位置に追加します ---
+        dat, label, tan, running_mask, padding_mask, all_tan, racelist = m.evaluate_all_race()
+        
         self.dat = dat
         self.label = label
         self.tan = tan
@@ -773,6 +793,9 @@ class MagokoroDataset(Dataset):
         self.racelist = racelist
         self.is_training = is_training
         self.random_noise = RaceDataAugmentation()
+        
+        # --- 💡 ここを修正：メンバ変数にしっかりと保持させます ---
+        self.all_tan = all_tan
 
         #self.report_dat()
 
@@ -831,3 +854,9 @@ class MagokoroDataset(Dataset):
 
     def __len__(self):
         return len(self.dat)
+
+    # --- 💡 この専用関数を新しく追加します ---
+    def get_all_odds(self, index):
+        """バックテスト専用：指定したインデックスの全馬のオッズを返す"""
+        return torch.FloatTensor(self.all_tan[index])
+
